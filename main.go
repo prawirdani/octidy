@@ -17,12 +17,46 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"runtime/debug"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// version is injected at build time via -ldflags "-X main.version=...".
+// Dev builds keep the placeholder.
+var version = "dev"
+
+// appVersion resolves the version string. It prefers the ldflags-injected
+// value (Makefile/CI); when that is absent it falls back to the module
+// version stamped by `go install pkg@vX.Y.Z`.
+func appVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return bi.Main.Version
+	}
+	return version
+}
+
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "-h", "--help", "help":
+			printUsage(os.Stdout)
+			return
+		case "-v", "--version", "version":
+			fmt.Println("octidy", appVersion())
+			return
+		default:
+			fmt.Fprintf(os.Stderr, "octidy: unknown argument %q\n\n", os.Args[1])
+			printUsage(os.Stderr)
+			os.Exit(2)
+		}
+	}
+
 	sessions, err := loadSessions()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -46,6 +80,20 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+// printUsage writes the help text to w.
+func printUsage(w io.Writer) {
+	fmt.Fprint(w, `octidy - interactive TUI to delete opencode sessions
+
+Usage:
+  octidy            launch the interactive session picker
+  octidy -h         show this help
+  octidy -v         show version
+
+Environment:
+  OPENCODE_BIN      path to the opencode executable (default: opencode)
+`)
 }
 
 // reportFailures prints any failed deletes to stderr and returns the count.

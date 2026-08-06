@@ -1,5 +1,6 @@
 BINARY  := octidy
-LDFLAGS := -s -w
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.version=$(VERSION)
 GOFLAGS := -trimpath
 
 # Build targets are produced by the CI workflow; keep names aligned with dist/.
