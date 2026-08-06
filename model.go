@@ -1,11 +1,20 @@
 package main
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// doneLinger is how long the final "Deleted N" summary stays on screen before
+// the program exits, so the result is actually visible.
+const doneLinger = 1200 * time.Millisecond
+
+// quitMsg is sent after doneLinger elapses on the done screen.
+type quitMsg struct{}
 
 // state is the top-level screen the TUI is showing.
 type state int
@@ -112,12 +121,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
+	case quitMsg:
+		return m, tea.Quit
+
 	case deleteDoneMsg:
 		m.results = append(m.results, result(msg))
 		m.done++
 		if m.done >= m.total {
 			m.state = stateDone
-			return m, tea.Quit
+			// Linger so the "Deleted N" summary actually paints before we quit.
+			return m, tea.Tick(doneLinger, func(time.Time) tea.Msg { return quitMsg{} })
 		}
 		// Backfill: as one delete finishes, start the next queued one so we
 		// keep ~maxConcurrent in flight.
