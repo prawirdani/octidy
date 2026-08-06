@@ -25,15 +25,97 @@ touched.
 - The `opencode` CLI on `$PATH` at runtime (see `OPENCODE_BIN` below)
 - A TTY for the interactive UI
 
-## Install
+## Installation
 
-From source:
+Prebuilt binaries for every OS/arch are attached to each
+[release](https://github.com/prawirdani/octidy/releases) (built by CI on every
+`v*` tag). Grab them with the one-liner below, download manually, or build from
+source.
+
+### One-liner
+
+**Linux / macOS** (installs to `/usr/local/bin`):
 
 ```sh
-go install .            # or: make build
+curl -fsSL "https://github.com/prawirdani/octidy/releases/latest/download/octidy-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" -o octidy && chmod +x octidy && sudo mv octidy /usr/local/bin/octidy
 ```
 
-Or download a prebuilt binary from the Releases page of this repository.
+**Windows** (PowerShell — run in a directory on your `PATH`, e.g. `C:\Users\<you>\bin`):
+
+```powershell
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }; Invoke-WebRequest "https://github.com/prawirdani/octidy/releases/latest/download/octidy-windows-$arch.exe" -OutFile octidy.exe
+```
+
+### Asset matrix
+
+Prefer manual download? Pick the file matching your OS and CPU:
+
+| OS      | CPU architecture | Asset                     |
+|---------|------------------|---------------------------|
+| Linux   | x86_64 (amd64)   | `octidy-linux-amd64`      |
+| Linux   | aarch64 (arm64)  | `octidy-linux-arm64`      |
+| macOS   | x86_64 (amd64)   | `octidy-darwin-amd64`     |
+| macOS   | Apple Silicon    | `octidy-darwin-arm64`     |
+| Windows | x86_64 (amd64)   | `octidy-windows-amd64.exe`|
+| Windows | arm64            | `octidy-windows-arm64.exe`|
+
+Find your CPU with `uname -m` on Linux/macOS (`x86_64` → amd64,
+`aarch64` → arm64), or `echo $env:PROCESSOR_ARCHITECTURE` in PowerShell.
+
+Every asset is reachable at the stable URL
+`https://github.com/prawirdani/octidy/releases/latest/download/<asset>`, so you
+can pin a specific version by replacing `latest` with a tag (e.g. `v0.1.0`).
+
+### Linux
+
+```sh
+chmod +x octidy-linux-amd64
+sudo mv octidy-linux-amd64 /usr/local/bin/octidy
+```
+
+The binary is statically linked (CGO disabled) and runs on both glibc- and
+musl-based distros.
+
+### macOS
+
+```sh
+chmod +x octidy-darwin-arm64   # or octidy-darwin-amd64 on Intel Macs
+sudo mv octidy-darwin-arm64 /usr/local/bin/octidy
+```
+
+If Gatekeeper refuses to run the downloaded binary, clear the quarantine flag:
+
+```sh
+xattr -dr com.apple.quarantine /usr/local/bin/octidy
+```
+
+### Windows
+
+```powershell
+# from PowerShell, into a directory on your PATH (or just where you'll run it)
+Move-Item .\octidy-windows-amd64.exe C:\Users\<you>\bin\octidy.exe
+```
+
+Run `octidy.exe` from any terminal afterwards. Use the arm64 asset on ARM64
+Windows.
+
+### Verify
+
+```sh
+octidy
+```
+
+The TUI should open immediately. It needs the `opencode` CLI on `$PATH` (see
+`OPENCODE_BIN` below) and a real terminal — piping or backgrounding the process
+won't work.
+
+### Build from source
+
+Requires Go 1.26+:
+
+```sh
+go install .   # or: make build
+```
 
 ## Usage
 
