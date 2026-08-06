@@ -3,6 +3,9 @@
 Interactive TUI (Bubble Tea) for deleting opencode sessions. Thin wrapper over the
 `opencode` CLI — no opencode storage internals touched.
 
+## Rules
+- NEVER commit or push without explicit user approval.
+
 ## Commands
 - `make build` — build for current OS into `dist/octidy`
 - `make build-all` — cross-compile all OS/arch into `dist/`
