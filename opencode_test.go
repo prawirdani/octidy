@@ -38,6 +38,32 @@ fi
 	}
 }
 
+// TestLoadSessionsEmptyOutput verifies opencode printing nothing (exit 0) for
+// "no sessions in this directory" is treated as an empty list, not a parse
+// error.
+func TestLoadSessionsEmptyOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script fake not portable to windows")
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fakeoc")
+	if err := os.WriteFile(fake, []byte("#!/usr/bin/env bash\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	old := opencodeBin
+	opencodeBin = fake
+	defer func() { opencodeBin = old }()
+
+	got, err := loadSessions()
+	if err != nil {
+		t.Fatalf("loadSessions: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("loadSessions=%+v want empty list", got)
+	}
+}
+
 func TestEnvOr(t *testing.T) {
 	t.Setenv("OC_TEST_KEY", "")
 	if got := envOr("OC_TEST_KEY", "fallback"); got != "fallback" {

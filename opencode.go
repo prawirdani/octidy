@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -36,6 +37,12 @@ func loadSessions() ([]Session, error) {
 			return nil, fmt.Errorf("opencode session list failed: %s", ee.Stderr)
 		}
 		return nil, fmt.Errorf("running opencode: %w", err)
+	}
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		// opencode prints nothing (exit 0) when there are no sessions for
+		// the current directory; treat that as an empty list, not an error.
+		return nil, nil
 	}
 	var sessions []Session
 	if err := json.Unmarshal(out, &sessions); err != nil {
