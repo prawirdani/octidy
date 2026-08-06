@@ -1,13 +1,15 @@
 # octidy
 
-Interactive TUI (Bubble Tea) for browsing and deleting opencode sessions.
-A thin wrapper over the `opencode` CLI — no opencode storage internals are
-touched.
+Interactive terminal UI (TUI) to browse and **bulk-delete opencode sessions** —
+clean up stale opencode chat sessions from your terminal in seconds. A thin
+wrapper over the `opencode` CLI, so no opencode storage internals are touched.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/prawirdani/octidy.svg)](https://pkg.go.dev/github.com/prawirdani/octidy)
 [![codecov](https://codecov.io/github/Prawirdani/octidy/graph/badge.svg)](https://codecov.io/github/Prawirdani/octidy)
 [![Go Report Card](https://goreportcard.com/badge/github.com/prawirdani/octidy)](https://goreportcard.com/report/github.com/prawirdani/octidy)
 ![Build Status](https://github.com/prawirdani/octidy/actions/workflows/ci.yml/badge.svg)
+
+![octidy demo](assets/demo.gif)
 
 ## Features
 
