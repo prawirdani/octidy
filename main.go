@@ -53,6 +53,12 @@ func main() {
 		case "-v", "--version", "version":
 			fmt.Println("octidy", appVersion())
 			return
+		case "--prune":
+			runMaintenance(false)
+			return
+		case "--vacuum":
+			runMaintenance(true)
+			return
 		default:
 			fmt.Fprintf(os.Stderr, "octidy: unknown argument %q\n\n", os.Args[1])
 			printUsage(os.Stderr)
@@ -70,27 +76,79 @@ func main() {
 		return
 	}
 
-	p := tea.NewProgram(newModel(sessions), tea.WithAltScreen())
+	m := newModel(sessions)
+	// Wired here, not in newModel, so tests stay hermetic (no store access).
+	m.collect = collectArtifacts
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 
-	// After the alt-screen tears down, print a plain summary and set exit code.
-	if fm, ok := finalModel.(model); ok && fm.state == stateDone {
+	fm, ok := finalModel.(model)
+	if !ok {
+		return
+	}
+	if fm.state == stateDone {
+		// Leftover artifacts of the sessions that actually got deleted
+		// (truncated tool output, captured shell output, legacy v1 storage
+		// dirs). opencode does not remove these itself, and a failed delete
+		// must keep its files because the session still references them.
+		if files, bytes := prunePaths(deletedArtifacts(fm.results, fm.artifacts)); files > 0 {
+			fmt.Printf("pruned %d artifact(s), %s freed\n", files, humanBytes(bytes))
+		}
 		if fail := reportFailures(fm.results); fail > 0 {
 			os.Exit(1)
 		}
 	}
 }
 
+// deletedArtifacts flattens the collected artifacts of the sessions that
+// actually got deleted. A failed delete keeps its files: the session still
+// references them.
+func deletedArtifacts(results []result, artifacts map[string][]string) []string {
+	var paths []string
+	for _, r := range results {
+		if r.err == nil {
+			paths = append(paths, artifacts[r.id]...)
+		}
+	}
+	return paths
+}
+
+// runMaintenance performs the offline cleanup passes (orphan sweep, optional
+// VACUUM) and prints what was reclaimed.
+func runMaintenance(vacuum bool) {
+	dir := dataDir()
+	if dir == "" {
+		fmt.Fprintln(os.Stderr, "error: cannot locate the opencode data directory")
+		os.Exit(1)
+	}
+	st, err := sweepOrphans(dir, vacuum)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("removed %d orphan artifact(s) (%s), %d orphan row(s)\n",
+		st.Files, humanBytes(st.Bytes), st.Rows)
+	if vacuum {
+		if st.Reclaimed > 0 {
+			fmt.Printf("reclaimed %s from %s/opencode.db\n", humanBytes(st.Reclaimed), dir)
+		} else {
+			fmt.Println("database already compact; nothing to reclaim")
+		}
+	}
+}
+
 // printUsage writes the help text to w.
 func printUsage(w io.Writer) {
-	fmt.Fprint(w, `octidy - interactive TUI to delete opencode sessions
+	_, _ = fmt.Fprint(w, `octidy - interactive TUI to delete opencode sessions
 
 Usage:
   octidy            launch the interactive session picker
+  octidy --prune    remove orphaned sessions, messages and leftover files
+  octidy --vacuum   --prune, then compact opencode.db (stop the service first)
   octidy -h         show this help
   octidy -v         show version
 

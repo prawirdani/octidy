@@ -78,6 +78,14 @@ type model struct {
 	// a fake in tests so the confirm->deleting->done flow is exercisable without
 	// a real opencode install or a TTY.
 	deleter func(id string) error
+
+	// collect resolves the on-disk artifacts owned by the sessions about to be
+	// deleted, keyed by session id. It must run before the deletes; afterwards
+	// the stored parts that point at those files are gone. Swappable in tests.
+	collect func(ids []string) map[string][]string
+
+	// artifacts holds what collect found, pruned once the TUI exits.
+	artifacts map[string][]string
 }
 
 func newModel(sessions []Session) model {
@@ -265,6 +273,15 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y", "Y":
 		m.targets = m.selectedSessions()
 		m.queue = m.targets
+		// Capture the artifacts before opencode cascades the parts that
+		// reference them; they are pruned after the TUI exits.
+		if m.collect != nil {
+			ids := make([]string, 0, len(m.targets))
+			for _, s := range m.targets {
+				ids = append(ids, s.ID)
+			}
+			m.artifacts = m.collect(ids)
+		}
 		m.total = len(m.targets)
 		m.done = 0
 		m.state = stateDeleting

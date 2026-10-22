@@ -15,9 +15,12 @@ wrapper over the `opencode` CLI, so no opencode storage internals are touched.
 
 - List root sessions from every project (title, relative age, working directory)
 - Multi-select with `space`, select-all (`a`) / select-none (`n`)
+- Live `/` filter over title and working directory
 - `y/N` confirmation gate before anything is deleted
 - Concurrent deletes (capped at 8 in flight) with live ✓/✗ progress
 - Failure summary + non-zero exit code if any delete fails
+- Prunes the deleted sessions' leftover files; `--prune` / `--vacuum` sweep
+  orphans and compact the database
 - Works with opencode v2 (global listing via `opencode api`) and falls back to
   the v1 CLI on older installs
 
@@ -141,6 +144,33 @@ Keybindings:
 
 Exit code is non-zero when one or more deletes fail.
 
+### Pruning leftovers
+
+`opencode session delete` removes the session **rows** (messages, parts, child
+sessions) but leaves the bytes behind: SQLite never shrinks its file, and
+truncated tool output, captured shell output and legacy storage directories
+survive the delete.
+
+octidy cleans up after itself:
+
+- after every delete it removes the artifacts the deleted sessions owned
+  (tool-output files, `shell/<project>/sh_*.out`, legacy `storage/` dirs);
+- `octidy --prune` sweeps orphans: dangling child sessions, unreachable
+  messages/parts, and `snapshot/`, `shell/` or `storage/` directories whose
+  project/session no longer exists;
+- `octidy --vacuum` does the sweep, then checkpoints the WAL and `VACUUM`s
+  `opencode.db` to hand free pages back to the filesystem.
+
+```sh
+octidy --prune     # safe with opencode running
+octidy --vacuum    # rewrites the whole db; stop the service first
+opencode service stop && octidy --vacuum
+```
+
+VACUUM needs free disk roughly the size of the written database and takes
+seconds per GB. `--vacuum` refuses to start while the opencode service is
+running, because it needs exclusive access to the store.
+
 ### Environment
 
 | Variable       | Description                                             |
@@ -157,6 +187,9 @@ Exit code is non-zero when one or more deletes fail.
    `opencode session list --format json` (project-scoped by design).
 2. Deletes chosen sessions via `opencode session delete <id>` — in v2 this also
    deletes the session's child (subagent) sessions.
+3. Before the delete it records the artifacts those sessions own (from the
+   stored parts that reference them), and removes them once the TUI exits —
+   opencode itself does not.
 
 Deletes run in a pool of at most 8 concurrent subprocesses (`maxConcurrent` in
 `model.go`), because opencode's store is a single-writer SQLite database.
@@ -181,9 +214,11 @@ make clean        # remove dist/
 | `view.go`      | Rendering                             |
 | `styles.go`    | lipgloss theme                        |
 | `util.go`      | Pure helpers                          |
+| `prune.go`     | Artifact collection, orphan sweep, VACUUM |
 
-Tests never need a real opencode install: `model.deleter` is injected and
-`opencodeBin` points at a fake script.
+Tests never need a real opencode install: `model.deleter` and `model.collect`
+are injected and `opencodeBin` points at a fake script. `prune_test.go` builds
+a throwaway SQLite store with `modernc.org/sqlite` (pure Go, no cgo).
 
 ## License
 
