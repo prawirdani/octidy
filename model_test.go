@@ -534,9 +534,9 @@ func pump(t *testing.T, m model, cmd tea.Cmd) model {
 			continue
 		}
 		msg := c()
-		switch msg.(type) {
+		switch msg := msg.(type) {
 		case tea.BatchMsg:
-			queue = append(queue, msg.(tea.BatchMsg)...)
+			queue = append(queue, msg...)
 			continue
 		case spinner.TickMsg:
 			// Drop spinner ticks so the loop terminates.
