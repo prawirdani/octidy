@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -52,9 +53,16 @@ type deleteDoneMsg result
 
 type model struct {
 	sessions []Session
-	cursor   int
+	cursor   int // indexes into the VISIBLE slice, not m.sessions
 	selected map[int]bool
 	state    state
+
+	// filter is the live query typed after '/'. filtering is true while the
+	// user is typing it. Both are a VIEW over m.sessions — never a mutation —
+	// so selected/cursor indices stay valid and no session is deleted by the
+	// wrong index. Resolve cursor -> real index via visibleIndexes().
+	filter    string
+	filtering bool
 
 	vp      viewport.Model
 	vpReady bool
@@ -142,30 +150,105 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// visibleIndexes returns the indices into m.sessions whose Title OR Directory
+// contains the filter (case-insensitive substring). With an empty filter every
+// index is visible, in order. This is the single source of truth for the
+// cursor -> real-session-index mapping: never reslice m.sessions itself.
+func (m model) visibleIndexes() []int {
+	if m.filter == "" {
+		idx := make([]int, len(m.sessions))
+		for i := range m.sessions {
+			idx[i] = i
+		}
+		return idx
+	}
+	q := strings.ToLower(m.filter)
+	var out []int
+	for i, s := range m.sessions {
+		if strings.Contains(strings.ToLower(s.Title), q) ||
+			strings.Contains(strings.ToLower(s.Directory), q) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// clampCursor keeps the cursor within the current visible list (0 when empty).
+func (m *model) clampCursor() {
+	n := len(m.visibleIndexes())
+	if n == 0 {
+		m.cursor = 0
+		return
+	}
+	if m.cursor > n-1 {
+		m.cursor = n - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+}
+
 func (m model) updateSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Filtering mode: capture typing into m.filter. ctrl+c still quits.
+	if m.filtering {
+		switch msg.Type {
+		case tea.KeyCtrlC:
+			return m, tea.Quit
+		case tea.KeyEnter:
+			m.filtering = false // stop typing; the filter stays applied
+		case tea.KeyEsc:
+			m.filter = "" // esc clears the filter and stops typing
+			m.filtering = false
+		case tea.KeyBackspace:
+			if r := []rune(m.filter); len(r) > 0 {
+				m.filter = string(r[:len(r)-1])
+			}
+		case tea.KeyRunes, tea.KeySpace:
+			m.filter += string(msg.Runes)
+		}
+		m.clampCursor()
+		m.vp.SetContent(m.listContent())
+		m.ensureCursorVisible()
+		return m, nil
+	}
+
+	vis := m.visibleIndexes()
 	switch msg.String() {
 	case "ctrl+c", "q", "esc":
 		return m, tea.Quit
+	case "/":
+		m.filtering = true
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
 		}
 	case "down", "j":
-		if m.cursor < len(m.sessions)-1 {
+		if m.cursor < len(vis)-1 {
 			m.cursor++
 		}
 	case "g", "home":
 		m.cursor = 0
 	case "G", "end":
-		m.cursor = len(m.sessions) - 1
+		if len(vis) > 0 {
+			m.cursor = len(vis) - 1
+		}
 	case " ":
-		m.selected[m.cursor] = !m.selected[m.cursor]
+		// Self-guard the irreversible-delete path: only toggle when the cursor
+		// points at a real visible row, regardless of clamp state.
+		if m.cursor < len(vis) {
+			real := vis[m.cursor]
+			m.selected[real] = !m.selected[real]
+		}
 	case "a":
-		for i := range m.sessions {
-			m.selected[i] = true
+		// Select the visible set only (all sessions when no filter).
+		for _, real := range vis {
+			m.selected[real] = true
 		}
 	case "n":
-		m.selected = make(map[int]bool)
+		// Clear the visible set only; selections filtered away persist.
+		for _, real := range vis {
+			delete(m.selected, real)
+		}
 	case "enter":
 		if m.countSelected() > 0 {
 			m.state = stateConfirm

@@ -28,13 +28,17 @@ func (m model) listContent() string {
 	titleW, timeW, dirW := listLayout(m.w)
 
 	var b []byte
-	for i, s := range m.sessions {
+	// Iterate the VISIBLE view over m.sessions. pos is the cursor position in
+	// the visible list; real is the true index into m.sessions used for the
+	// checkbox and selection state.
+	for pos, real := range m.visibleIndexes() {
+		s := m.sessions[real]
 		cursor := "  "
-		if i == m.cursor {
+		if pos == m.cursor {
 			cursor = "> "
 		}
 		check := "[ ]"
-		if m.selected[i] {
+		if m.selected[real] {
 			check = checkStyle.Render("[✓]")
 		}
 		title := truncate(s.Title, titleW)
@@ -42,7 +46,7 @@ func (m model) listContent() string {
 		dir := truncate(s.Directory, dirW)
 
 		titleR := normalRowStyle.Render(fmt.Sprintf("%-*s", titleW, title))
-		if i == m.cursor {
+		if pos == m.cursor {
 			titleR = cursorRowStyle.Render(fmt.Sprintf("%-*s", titleW, title))
 		}
 		line := fmt.Sprintf("%s%s %s  %s  %s",
@@ -71,13 +75,26 @@ func (m model) View() string {
 func (m model) viewSelect() string {
 	title := titleStyle.Render(" opencode session cleaner ")
 	count := countStyle.Render(fmt.Sprintf("%d selected", m.countSelected()))
+
+	// When a filter is active (or being typed) show the query and matched/total.
+	sessionInfo := dimStyle.Render(fmt.Sprintf("%d sessions", len(m.sessions)))
+	if m.filtering || m.filter != "" {
+		matched := len(m.visibleIndexes())
+		query := m.filter
+		if m.filtering {
+			query += "█" // cursor block while typing
+		}
+		sessionInfo = fmt.Sprintf("%s  %s",
+			countStyle.Render("/"+query),
+			dimStyle.Render(fmt.Sprintf("%d/%d matched", matched, len(m.sessions))))
+	}
 	header := lipgloss.JoinHorizontal(lipgloss.Center, title, "  ",
-		dimStyle.Render(fmt.Sprintf("%d sessions", len(m.sessions))), "  ", count)
+		sessionInfo, "  ", count)
 
 	body := boxStyle.Width(m.w - 2).Render(m.vp.View())
 
 	help := helpStyle.Render(
-		"↑/↓ move · space select · a all · n none · enter delete · q quit")
+		"↑/↓ move · space select · a all · n none · / filter · enter delete · q quit")
 
 	return fmt.Sprintf("%s\n%s\n%s", header, body, help)
 }
