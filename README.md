@@ -13,13 +13,13 @@ wrapper over the `opencode` CLI, so no opencode storage internals are touched.
 
 ## Features
 
-- List sessions with title, relative age, and working directory
+- List root sessions from every project (title, relative age, working directory)
 - Multi-select with `space`, select-all (`a`) / select-none (`n`)
 - `y/N` confirmation gate before anything is deleted
 - Concurrent deletes (capped at 8 in flight) with live ✓/✗ progress
 - Failure summary + non-zero exit code if any delete fails
-- Works over the existing `opencode` CLI, so it stays compatible with whatever
-  opencode version you have installed
+- Works with opencode v2 (global listing via `opencode api`) and falls back to
+  the v1 CLI on older installs
 
 ## Requirements
 
@@ -149,8 +149,14 @@ Exit code is non-zero when one or more deletes fail.
 
 ## How it works
 
-1. Loads sessions via `opencode session list --format json`
-2. Deletes chosen sessions via `opencode session delete <id>`
+1. Loads root sessions across **all** projects via
+   `opencode api session.list --param limit=100000 --param parentID=null`
+   (opencode v2 scopes `opencode session list` to the current project and caps it
+   at `-n 100`, which is why it showed only a few sessions). opencode v1 installs,
+   which have no `api` subcommand, fall back to
+   `opencode session list --format json` (project-scoped by design).
+2. Deletes chosen sessions via `opencode session delete <id>` — in v2 this also
+   deletes the session's child (subagent) sessions.
 
 Deletes run in a pool of at most 8 concurrent subprocesses (`maxConcurrent` in
 `model.go`), because opencode's store is a single-writer SQLite database.

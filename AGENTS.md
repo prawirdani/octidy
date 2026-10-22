@@ -18,12 +18,13 @@ Interactive TUI (Bubble Tea) for deleting opencode sessions. Thin wrapper over t
   prebuilt binaries as release assets (`softprops/action-gh-release`).
 
 ## Key facts
-- Loads sessions via `opencode session list --format json`, deletes via `opencode session delete <id>`.
-- `OPENCODE_BIN` env var overrides the opencode executable (opencode.go:12).
+- Loads root sessions across all projects via `opencode api session.list` (v2). v1 installs fall back
+  to project-scoped `opencode session list --format json`. Deletes via `opencode session delete <id>`.
+- `OPENCODE_BIN` env var overrides the opencode executable (opencode.go:13).
 - Source layout: opencode.go = data access, model.go = state machine, view.go = rendering,
   styles.go = lipgloss theme, util.go = pure helpers.
-- Tests never need a real opencode install: `model.deleter` is injected (model.go:63) and
+- Tests never need a real opencode install: `model.deleter` is injected (model.go:95) and
   `opencodeBin` is pointed at a fake script.
-- `maxConcurrent = 8` caps parallel deletes (model.go:31); opencode's store is single-writer SQLite.
+- `maxConcurrent = 8` caps parallel deletes (model.go:41); opencode's store is single-writer SQLite.
 - Headless test pattern: `tea.NewProgram(m, tea.WithoutRenderer(), tea.WithInput(...))` + injected
   deleter, so no TTY needed.

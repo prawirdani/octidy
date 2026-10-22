@@ -38,6 +38,38 @@ fi
 	}
 }
 
+// TestLoadSessionsAPIShape verifies the v2 `api session.list` JSON is mapped
+// into Session (nested time.updated / location.directory), so all projects are
+// listed instead of the current one.
+func TestLoadSessionsAPIShape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script fake not portable to windows")
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fakeoc")
+	script := `#!/usr/bin/env bash
+if [ "$1 $2" = "api session.list" ]; then
+  echo '{"data":[{"id":"ses_a","title":"A","time":{"updated":456},"location":{"directory":"/proj/a"}}],"cursor":{"next":null}}'
+fi
+`
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	old := opencodeBin
+	opencodeBin = fake
+	defer func() { opencodeBin = old }()
+
+	got, err := loadSessions()
+	if err != nil {
+		t.Fatalf("loadSessions: %v", err)
+	}
+	want := Session{ID: "ses_a", Title: "A", Updated: 456, Directory: "/proj/a"}
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("loadSessions=%+v want [%+v]", got, want)
+	}
+}
+
 // TestLoadSessionsEmptyOutput verifies opencode printing nothing (exit 0) for
 // "no sessions in this directory" is treated as an empty list, not a parse
 // error.

@@ -1,8 +1,11 @@
 // Command octidy is an interactive TUI to delete opencode sessions.
 //
 // It is a thin wrapper over the existing opencode CLI:
-//   - `opencode session list --format json` to load sessions
-//   - `opencode session delete <id>`        to delete a chosen session
+//   - `opencode api session.list` to load sessions across all projects
+//     (opencode v2 scopes `session list` to one project, so it under-reports;
+//     v1 installs fall back to `opencode session list --format json`)
+//   - `opencode session delete <id>` to delete a chosen session (and its
+//     child sessions)
 //
 // No opencode storage internals are touched. Set OPENCODE_BIN to point at a
 // non-default opencode executable.
